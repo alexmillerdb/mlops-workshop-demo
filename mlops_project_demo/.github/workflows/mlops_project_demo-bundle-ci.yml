@@ -1,0 +1,95 @@
+# This GitHub workflow validates Bundle config (ML resource config and more)
+# defined under mlops_project_demo/resources/*
+# and mlops_project_demo/databricks.yml, when PRs are merged into the main branch
+name: Bundle validation for mlops_project_demo
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'mlops_project_demo/**'
+
+defaults:
+  run:
+    working-directory: ./mlops_project_demo/
+
+env:
+  STAGING_WORKSPACE_TOKEN: ${{ secrets.STAGING_WORKSPACE_TOKEN }}
+  PROD_WORKSPACE_TOKEN: ${{ secrets.PROD_WORKSPACE_TOKEN }}
+
+jobs:
+  staging:
+    concurrency: mlops_project_demo-staging-bundle-job
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: databricks/setup-cli@v0.221.0
+      - name: Validate Bundle For Staging
+        id: validate
+        env:
+          DATABRICKS_TOKEN: ${{ env.STAGING_WORKSPACE_TOKEN }}
+        run: |
+          databricks bundle validate -t staging > ../validate_output.txt
+      - name: Create Comment with Bundle Configuration
+        uses: actions/github-script@v6
+        id: comment
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const fileContents = fs.readFileSync('validate_output.txt', 'utf8');
+            const output = `#### Bundle Staging Config Validated 🖌
+            <details><summary>Staging Validation Output</summary>
+
+            \`\`\`\n
+            ${fileContents}
+            \`\`\`
+
+            </details>`
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+  prod:
+    concurrency: mlops_project_demo-prod-bundle-job
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: databricks/setup-cli@v0.221.0
+      - name: Validate Bundle For Prod
+        id: validate
+        env:
+          DATABRICKS_TOKEN: ${{ env.PROD_WORKSPACE_TOKEN }}
+        run: |
+          databricks bundle validate -t prod > ../validate_output.txt
+      - name: Create Comment with Bundle Configuration
+        uses: actions/github-script@v6
+        id: comment
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const fileContents = fs.readFileSync('validate_output.txt', 'utf8');
+            const output = `#### Bundle Prod Config Validated 🖌
+            <details><summary>Prod Validation Output</summary>
+
+            \`\`\`\n
+            ${fileContents}
+            \`\`\`
+
+            </details>`
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
