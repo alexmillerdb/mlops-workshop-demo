@@ -1,7 +1,7 @@
 new_cluster: &new_cluster
   new_cluster:
-    num_workers: 3
-    spark_version: 13.3.x-cpu-ml-scala2.12
+    num_workers: 2
+    spark_version: 14.3.x-cpu-ml-scala2.12
     node_type_id: i3.xlarge
     custom_tags:
       clusterSource: mlops-stacks_0.3
@@ -14,7 +14,7 @@ common_permissions: &permissions
 resources:
   jobs:
     write_feature_table_job:
-      name: ${bundle.target}-mlops_project_demo-write-feature-table-job
+      name: ${bundle.target}-mlops_project_demo-write-feature-table-job-${var.schema_suffix}
       job_clusters:
         - job_cluster_key: write_feature_table_job_cluster
           <<: *new_cluster
@@ -27,10 +27,10 @@ resources:
               # TODO modify these arguments to reflect your setup.
               input_table_path: /databricks-datasets/nyctaxi-with-zipcodes/subsampled
               # TODO: Empty start/end dates will process the whole range. Update this as needed to process recent data.
-              input_start_date: ""
-              input_end_date: ""
+              input_start_date: "2023-01-01"
+              input_end_date: "2023-02-01"
               timestamp_column: tpep_pickup_datetime
-              output_table_name: ${bundle.target}.mlops_project_demo.trip_pickup_features
+              output_table_name: ${bundle.target}.mlops_project_demo.trip_pickup_features_${var.schema_suffix}
               features_transform_module: pickup_features
               primary_keys: zip
               # git source information of current ML resource deployment. It will be persisted as part of the workflow run
@@ -43,10 +43,10 @@ resources:
               # TODO: modify these arguments to reflect your setup.
               input_table_path: /databricks-datasets/nyctaxi-with-zipcodes/subsampled
               # TODO: Empty start/end dates will process the whole range. Update this as needed to process recent data.
-              input_start_date: ""
-              input_end_date: ""
+              input_start_date: "2023-01-01"
+              input_end_date: "2023-02-01"
               timestamp_column: tpep_dropoff_datetime
-              output_table_name: ${bundle.target}.mlops_project_demo.trip_dropoff_features
+              output_table_name: ${bundle.target}.mlops_project_demo.trip_dropoff_features_${var.schema_suffix}
               features_transform_module: dropoff_features
               primary_keys: zip
               # git source information of current ML resource deployment. It will be persisted as part of the workflow run

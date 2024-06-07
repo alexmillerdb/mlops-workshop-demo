@@ -17,12 +17,12 @@ resources:
       model:
         name: ${var.model_name}
         catalog_name: ${bundle.target}
-        schema_name: mlops_project_demo
+        schema_name: mlops_project_demo_${var.schema_suffix}
         comment: Registered model in Unity Catalog for the "mlops_project_demo" ML Project for ${bundle.target} deployment target.
         <<: *grants
 
   experiments:
     experiment:
-      name: ${var.experiment_name}
+      name: ${var.experiment_name}_${var.schema_suffix}
       <<: *permissions
       description: MLflow Experiment used to track runs for mlops_project_demo project.

@@ -5,7 +5,7 @@
 new_cluster: &new_cluster
   new_cluster:
     num_workers: 3
-    spark_version: 13.3.x-cpu-ml-scala2.12
+    spark_version: 14.3.x-cpu-ml-scala2.12
     node_type_id: i3.xlarge
     custom_tags:
       clusterSource: mlops-stacks_0.3
@@ -18,7 +18,7 @@ common_permissions: &permissions
 resources:
   quality_monitors:
     mlops_project_demo_quality_monitor:
-      table_name: dev.mlops_project_demo.predictions
+      table_name: dev.mlops_project_demo.predictions_${var.schema_suffix}
       # TODO: Update the output schema name as per your requirements
       output_schema_name: ${bundle.target}.mlops_project_demo
       # TODO: Update the below parameters as per your requirements
@@ -35,7 +35,7 @@ resources:
         timezone_id: UTC
   jobs:
     retraining_job:
-      name: ${bundle.target}-mlops_project_demo-monitoring-retraining-job
+      name: ${bundle.target}-mlops_project_demo-monitoring-retraining-job-${var.schema_suffix}
       tasks:
         - task_key: monitored_metric_violation_check
           <<: *new_cluster

@@ -1,6 +1,7 @@
 # The name of the bundle. run `databricks bundle schema` to see the full bundle settings schema.
 bundle:
   name: mlops_project_demo
+  databricks_cli_version: "0.221.1"
 
 variables:
   experiment_name:
@@ -9,6 +10,9 @@ variables:
   model_name:
     description: Model name for the model training.
     default: mlops_project_demo-model
+  schema_suffix:
+    description: Schema suffix for the feature store.
+    default: am
 
 include:
   # Resources folder contains ML artifact resources for the ML project that defines model and experiment
