@@ -67,10 +67,9 @@ notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.ge
 %cd $notebook_path
 %cd ../features
 
-
 # COMMAND ----------
-# DBTITLE 1,Define input and output variables
 
+# DBTITLE 1,Define input and output variables
 input_table_path = dbutils.widgets.get("input_table_path")
 output_table_name = dbutils.widgets.get("output_table_name")
 input_start_date = dbutils.widgets.get("input_start_date")
@@ -84,21 +83,23 @@ assert output_table_name != "", "output_table_name notebook parameter must be sp
 
 # Extract database name. Needs to be updated for Unity Catalog.
 output_database = output_table_name.split(".")[0]
+output_schema = output_table_name.split(".")[1]
 
 # COMMAND ----------
+
 # DBTITLE 1,Create database.
-
 spark.sql("CREATE DATABASE IF NOT EXISTS " + output_database)
+spark.sql(f"CREATE SCHEMA IF NOT EXISTS {output_database}.{output_schema}")
 
 # COMMAND ----------
-# DBTITLE 1, Read input data.
 
+# DBTITLE 1, Read input data.
 raw_data = spark.read.format("delta").load(input_table_path)
 
 
 # COMMAND ----------
-# DBTITLE 1,Compute features.
 
+# DBTITLE 1,Compute features.
 # Compute the features. This is done by dynamically loading the features module.
 from importlib import import_module
 
@@ -113,27 +114,28 @@ features_df = compute_features_fn(
 )
 
 # COMMAND ----------
-# DBTITLE 1, Write computed features.
 
-from databricks import feature_store
+# DBTITLE 1,Write computed features.
+from databricks.feature_engineering import FeatureEngineeringClient
 
-fs = feature_store.FeatureStoreClient()
-
+fe = FeatureEngineeringClient()
 
 # Create the feature table if it does not exist first.
-# Note that this is a no-op if a table with the same name and schema already exists.
-fs.create_table(
-    name=output_table_name,
-    primary_keys=[x.strip() for x in pk_columns.split(",")],
-    timestamp_keys=[ts_column],
-    df=features_df,
-)
+# If table exists, append new rows based on primary_keys
+pks = [x.strip() for x in pk_columns.split(",")] + [ts_column]
 
-# Write the computed features dataframe.
-fs.write_table(
+if not spark.catalog.tableExists(output_table_name):
+  fe.create_table(
     name=output_table_name,
+    primary_keys=pks,
+    timestamp_keys=[ts_column],
+    df=features_df
+  )
+else:
+  fe.write_table(
     df=features_df,
-    mode="merge",
-)
+    name=output_table_name,
+    mode="merge"
+  )
 
 dbutils.notebook.exit(0)
