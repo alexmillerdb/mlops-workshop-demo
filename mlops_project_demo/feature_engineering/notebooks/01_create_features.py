@@ -7,27 +7,43 @@
 dbutils.widgets.text("catalog", "dev")
 dbutils.widgets.text("schema", "mlops_project_demo")
 dbutils.widgets.text("table", "dbdemos_fs_travel")
+dbutils.widgets.text("reset_all_data", "false")
 
 catalog = dbutils.widgets.get("catalog")
 schema = db = dbutils.widgets.get("schema")
 table = dbutils.widgets.get("table")
+reset_all_data = dbutils.widgets.get("reset_all_data")
+if reset_all_data.lower() == "true":
+  reset_all_data = True
+else:
+  reset_all_data = False
 
 # COMMAND ----------
 
-# DBTITLE 1,Set the notebook path directory and call utils folder
-import os
-path_list = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get().split("/")
-dir_path = "/Workspace/" + "/".join(path_list[:-3])
-util_path = dir_path + "/utils"
-init_path = util_path + "/00-init-expert"
+# DBTITLE 1,Setup initialization
+from mlops_project_demo.utils.setup_init import DBDemos
 
-%cd $dir_path
-%cd $util_path
+dbdemos = DBDemos()
+dbdemos.setup_schema(catalog, db, reset_all_data=reset_all_data)
 
 # COMMAND ----------
 
-# DBTITLE 1,Run Init Notebook - TO DO create Python Package instead
-dbutils.notebook.run(path=init_path, timeout_seconds=3600, arguments={"catalog": catalog, "schema": schema, "table": table})
+# DBTITLE 1,Setup feature datasets
+if not spark.catalog.tableExists("destination_location"):
+  print(f"Creating destination location table")
+  destination_location_df = spark.read.option("inferSchema", "true").load("/databricks-datasets/travel_recommendations_realtime/raw_travel_data/fs-demo_destination-locations/",  format="csv", header="true")
+  destination_location_df.write.mode('overwrite').saveAsTable('destination_location')
+
+if not spark.catalog.tableExists("travel_purchase"):
+  print(f"Creating travel purchase table")
+  travel_purchase_df = spark.read.option("inferSchema", "true").load("/databricks-datasets/travel_recommendations_realtime/raw_travel_data/fs-demo_vacation-purchase_logs/", format="csv", header="true")
+  travel_purchase_df = travel_purchase_df.withColumn("id", F.monotonically_increasing_id())
+  travel_purchase_df.withColumn("booking_date", F.col("booking_date").cast('date')).write.mode('overwrite').saveAsTable('travel_purchase')
+
+if not spark.catalog.tableExists("destination_location"):
+  print(f"Creating destination location table")
+  destination_location_df = spark.read.option("inferSchema", "true").load("/databricks-datasets/travel_recommendations_realtime/raw_travel_data/fs-demo_destination-locations/",  format="csv", header="true")
+  destination_location_df.write.mode('overwrite').saveAsTable('destination_location')
 
 # COMMAND ----------
 
@@ -57,33 +73,21 @@ dbutils.notebook.run(path=init_path, timeout_seconds=3600, arguments={"catalog":
 
 # COMMAND ----------
 
-from databricks.feature_engineering import FeatureEngineeringClient
-fe = FeatureEngineeringClient()
-
-def write_feature_table(name, df, primary_keys, description, timestamp_keys=None, mode="merge"):
-  if not spark.catalog.tableExists(name):
-    print(f"Feature table {name} does not exist. Creating feature table")
-    fe.create_table(name=name,
-                    primary_keys=primary_keys, 
-                    timestamp_keys=timestamp_keys, 
-                    df=df, 
-                    description=description)
-  else:
-    print(f"Feature table {name} exists, writing updated results with mode {mode}")
-    fe.write_table(
-      df=df,
-      name=name,
-      mode=mode
-    )
-
-
-# COMMAND ----------
-
 #Delete potential existing tables to reset all the demo
 # delete_fss(catalog, db, ["user_features", "destination_features", "destination_location_features", "availability_features"])
 
+from mlops_project_demo.feature_engineering.features.helper_functions import (
+  write_feature_table, 
+  create_user_features, 
+  destination_features_fn,
+  delete_fss
+)
 from databricks.feature_engineering import FeatureEngineeringClient
+
 fe = FeatureEngineeringClient()
+
+if reset_all_data:
+  delete_fss(catalog, db, ["user_features", "destination_features", "destination_location_features", "availability_features"])
 
 # For more details these functions are available under ./utils/00-init-expert
 user_features_df = create_user_features(spark.table('travel_purchase'))
@@ -145,7 +149,7 @@ destination_availability_stream = (
   .withColumnRenamed("event_ts", "ts")
 )
 
-DBDemos.stop_all_streams_asynch(sleep_time=30)
+dbdemos.stop_all_streams_asynch(sleep_time=30)
 display(destination_availability_stream)
 
 # COMMAND ----------
