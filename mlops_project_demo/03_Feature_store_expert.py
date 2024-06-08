@@ -37,7 +37,17 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./_resources/00-init-expert
+dbutils.widgets.text("catalog", "dev")
+dbutils.widgets.text("schema", "mlops_project_demo")
+dbutils.widgets.text("table", "dbdemos_fs_travel")
+
+catalog = dbutils.widgets.get("catalog")
+schema = dbutils.widgets.get("schema")
+table = dbutils.widgets.get("table")
+
+# COMMAND ----------
+
+# MAGIC %run ./utils/00-init-expert $catalog=$catalog $schema=$schema $table=$table
 
 # COMMAND ----------
 
@@ -121,27 +131,12 @@ fe.create_table(name=f"{catalog}.{db}.destination_location_features",
 
 # COMMAND ----------
 
-# MAGIC %sh ls /databricks-datasets/travel_recommendations_realtime/raw_travel_data/fs-demo_destination-availability_logs/json
+# MAGIC %sql
+# MAGIC CREATE VOLUME IF NOT EXISTS feature_store_volume
 
 # COMMAND ----------
 
-# MAGIC %sh ls /dbfs/tmp/alexm/feature_store_data/raw_travel_data/fs-demo_destination-availability_logs
-
-# COMMAND ----------
-
-import shutil
-
-source_directory = "/databricks-datasets/travel_recommendations_realtime/raw_travel_data/fs-demo_destination-availability_logs"
-destination_directory = "/Volumes/main/alex_m/feature_store_volume/availability_logs"
-
-shutil.copytree(source_directory, destination_directory)
-
-# COMMAND ----------
-
-source_path = "/databricks-datasets/travel_recommendations_realtime/raw_travel_data/fs-demo_destination-availability_logs/json"
-# source_path = "/Volumes/main/alex_m/feature_store_volume/availability_logs/json"
-checkpoint_path = f"/Volumes/{catalog}/{db}/feature_store_volume/availability_logs/stream/availability_schema3"
-spark.sql('CREATE VOLUME IF NOT EXISTS feature_store_volume')
+# spark.sql(f'CREATE VOLUME IF NOT EXISTS /Volumes/{catalog}/{db}/feature_store_volume')
 destination_availability_stream = (
   spark.readStream
   .format("cloudFiles")
@@ -150,100 +145,15 @@ destination_availability_stream = (
   .option("cloudFiles.inferColumnTypes", "true")
   .option("cloudFiles.schemaEvolutionMode", "rescue")
   .option("cloudFiles.schemaHints", "event_ts timestamp, booking_date date, destination_id int")
-  .option("cloudFiles.schemaLocation", checkpoint_path)
+  .option("cloudFiles.schemaLocation", f"/Volumes/{catalog}/{db}/feature_store_volume/stream/availability_schema")
   .option("cloudFiles.maxFilesPerTrigger", 100) #Simulate streaming
-  .load(source_path)
+  .load("/databricks-datasets/travel_recommendations_realtime/raw_travel_data/fs-demo_destination-availability_logs/json")
   .drop("_rescued_data")
   .withColumnRenamed("event_ts", "ts")
 )
 
 DBDemos.stop_all_streams_asynch(sleep_time=30)
 display(destination_availability_stream)
-
-# COMMAND ----------
-
-display(destination_availability_stream
-        .filter(F.col("destination_id")==9))
-
-# COMMAND ----------
-
-import json
-import uuid
-from datetime import datetime
-
-def write_json_to_databricks(availability, booking_date, destination_id, ts, name, price, directory_path):
-    # Ensure the directory path starts with /dbfs/ for direct DBFS access
-    # if not directory_path.startswith("/dbfs/"):
-    #     directory_path = "/dbfs" + directory_path
-    
-    # Generating a random UUID for the file name
-    file_uuid = uuid.uuid4()
-    
-    # Constructing the filename
-    filename = f"part-00000-{file_uuid}-c000.json"
-    full_path = f"{directory_path}/{filename}"
-
-    if isinstance(ts, datetime):
-        ts = ts.isoformat()
-    
-    # Preparing the JSON data
-    data = {
-        "availability": availability,
-        "booking_date": booking_date,
-        "destination_id": destination_id,
-        "event_ts": ts,
-        "name": name,
-        "price": price
-    }
-    
-    # Writing the JSON data to a file in the specified directory
-    with open(full_path, 'w') as f:
-        # json.dump(data, f, indent=4)
-        json.dump(data, f, allow_nan=False)
-        
-    print(f"File {full_path} has been created.")
-
-# # Example usage - assuming your Databricks environment has the specified directory in DBFS
-# write_json_to_databricks(
-#     992,
-#     "2022-12-23",
-#     9,
-#     "2022-12-23T13:00:00Z",
-#     "Virginia Beach, Virginia",
-#     1250,
-#     source_path
-# )
-
-# COMMAND ----------
-
-# import os
-
-# file_path = "/Volumes/main/alex_m/feature_store_volume/availability_logs/json/part-00000-8be43ca0-f3d8-408a-8e30-5b44539eb067-c000.json"
-# if os.path.exists(file_path):
-#     os.remove(file_path)
-#     print(f"File {file_path} has been deleted.")
-# else:
-#     print(f"File {file_path} does not exist.")
-
-# COMMAND ----------
-
-# from pyspark.sql.types import StructType, StructField, StringType, IntegerType, TimestampType
-
-# # Define the schema
-# schema = StructType([
-#     StructField("availability", IntegerType(), True),
-#     StructField("booking_date", StringType(), True),
-#     StructField("destination_id", IntegerType(), True),
-#     StructField("event_ts", TimestampType(), True),
-#     StructField("name", StringType(), True),
-#     StructField("price", IntegerType(), True)
-# ])
-# file_path = "/Volumes/main/alex_m/feature_store_volume/availability_logs/json/part-00000-cc351659-5a3d-41f9-b5b0-3fb3538bee97-c000.json"
-# display(spark.read.schema(schema).json(file_path))
-
-# COMMAND ----------
-
-# fe.drop_table(name=f"{catalog}.{db}.availability_features")
 
 # COMMAND ----------
 
@@ -260,8 +170,8 @@ fe.write_table(
     name=f"{catalog}.{db}.availability_features", 
     df=destination_availability_stream,
     mode="merge",
-    checkpoint_location= checkpoint_path,
-    trigger={'processingTime': '1 minute'} #Refresh the feature store table once, or {'processingTime': '1 minute'} for every minute-
+    checkpoint_location= f"/Volumes/{catalog}/{db}/feature_store_volume/stream/availability_checkpoint",
+    trigger={'once': True} #Refresh the feature store table once, or {'processingTime': '1 minute'} for every minute-
 )
 
 # COMMAND ----------
@@ -411,7 +321,7 @@ summary_cl = automl.classify(
     dataset = training_features_df,
     target_col = "purchased",
     primary_metric="log_loss",
-    timeout_minutes = 5
+    timeout_minutes = 15
 )
 #Make sure all users can access dbdemos shared experiment
 DBDemos.set_experiment_permission(f"{xp_path}/{xp_name}")
@@ -577,7 +487,10 @@ create_online_table(f"{catalog}.{db}.destination_location_features", ["destinati
 create_online_table(f"{catalog}.{db}.availability_features",         ["destination_id", "booking_date"], "ts")
 
 #wait for all the tables to be online
-wait_for_online_tables(catalog, db, ["user_features_online", "destination_features_online", "destination_location_features_online", "availability_features_online"])
+wait_for_online_tables(
+    catalog, 
+    db, 
+    ["user_features_online", "destination_features_online", "destination_location_features_online", "availability_features_online"])
 
 # COMMAND ----------
 
@@ -644,239 +557,6 @@ for i in range(3):
     inferences = wc.serving_endpoints.query(endpoint_name, inputs=lookup_keys)
     print(f"Inference time, end 2 end :{round((timeit.default_timer() - starting_time)*1000)}ms")
     print(inferences)
-
-# COMMAND ----------
-
-# MAGIC %md ### Test online lookup time for user features
-
-# COMMAND ----------
-
-from databricks.feature_engineering import FeatureEngineeringClient
-
-fe = FeatureEngineeringClient()
-fe.create_feature_spec(
-  name=f"{catalog}.{db}.user_features_online",
-  features=[
-      FeatureLookup(
-        table_name="user_features", 
-        lookup_key="user_id",
-        timestamp_lookup_key="ts",
-        feature_names=["mean_price_7d"]
-    )
-  ]
-)
-
-
-# COMMAND ----------
-
-from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.serving import EndpointCoreConfigInput, ServedEntityInput
-
-workspace = WorkspaceClient()
-
-# Create endpoint
-endpoint_name = "fse_user_features"
-
-workspace.serving_endpoints.create_and_wait(
-  name=endpoint_name,
-  config=EndpointCoreConfigInput(
-    served_entities=[
-      ServedEntityInput(
-        entity_name=f"{catalog}.{db}.user_features_online",
-        scale_to_zero_enabled=True,
-        workload_size="Small"
-      )
-    ]
-  )
-)
-
-
-# COMMAND ----------
-
-display(spark.table("main.alex_m.user_features").orderBy("user_id", "ts"))
-
-# COMMAND ----------
-
-from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.serving import EndpointCoreConfigInput, ServedEntityInput
-
-wc = WorkspaceClient()
-
-# COMMAND ----------
-
-table = f"{catalog}.{db}.user_features"
-user_id = 1236
-ts = "2022-08-03T20:26:36.669+00:00"
-mean_price_7d = 7000
-last_6m_purchases = 1
-user_longitude = -94.57856750488281
-user_latitude = 39.099727630615234
-
-warehouse_id = "5ab5dda58c1ea16b"
-sql_statement = f"""INSERT INTO {table} (user_id, ts, mean_price_7d, last_6m_purchases, user_longitude, user_latitude) VALUES ("{user_id}", "{ts}", "{mean_price_7d}", "{last_6m_purchases}", "{user_longitude}", "{user_latitude}")"""
-result = wc.statement_execution.execute_statement(
-    warehouse_id=warehouse_id,
-    catalog=catalog,
-    schema=db,
-    statement=sql_statement,
-    wait_timeout="0s"
-)
-result
-
-# COMMAND ----------
-
-online_table_pre = wc.online_tables.get(f"{table}_online")
-online_table_pre.status
-
-# COMMAND ----------
-
-import time
-
-def wait_for_statement_success(wc, statement_id, timeout_seconds=30):
-    """
-    Polls the statement status every 10 milliseconds until it's successful or a timeout is reached.
-
-    Args:
-    - wc: The web client or session used to make the request.
-    - statement_id: The ID of the statement to check.
-    - timeout_seconds: Maximum time to wait for success status before giving up.
-
-    Returns:
-    - True if the statement is successful within the timeout period, False otherwise.
-    """
-    start_time = time.time()
-    while (time.time() - start_time) < timeout_seconds:
-        # Retrieve the current status of the statement
-        statement = wc.statement_execution.get_statement(statement_id)
-        status_value = statement.status.state.value
-        
-        # Check if the statement is successful
-        if status_value.lower() == "succeeded":
-            print("Statement execution was successful.")
-            return True
-        
-        # Delay for 10 milliseconds before the next check
-        time.sleep(0.01)  # Sleep for 10 milliseconds
-
-    # If we reach this point, the statement was not successful within the timeout period
-    print("Timed out waiting for statement to succeed.")
-    return False
-
-# Example usage (assuming 'wc' and 'result.statement_id' are defined and valid)
-is_successful = wait_for_statement_success(wc, result.statement_id)
-
-
-# COMMAND ----------
-
-statement = wc.statement_execution.get_statement(result.statement_id)
-status_value = statement.status.state.value
-status_value
-
-# COMMAND ----------
-
-online_table_pre = wc.online_tables.get(f"{table}_online")
-online_table_pre_status = online_table_pre.status
-last_processed_commit_version = online_table_pre_status.continuous_update_status.last_processed_commit_version
-
-# COMMAND ----------
-
-online_table_pre.status.continuous_update_status.last_processed_commit_version
-
-# COMMAND ----------
-
-online_table_pre.status.continuous_update_status.initial_pipeline_sync_progress.latest_version_currently_processing
-
-# COMMAND ----------
-
-wc.pipelines.get('ef5cd72a-7647-4340-b0a7-4f6d1f45973b')
-
-# COMMAND ----------
-
-workspace_url = "https://" + spark.conf.get("spark.databricks.workspaceUrl")
-os.environ['DATABRICKS_TOKEN'] = DATABRICKS_TOKEN = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
-
-url = f"{workspace_url}/serving-endpoints/{endpoint_name}/invocations"
-
-headers = {'Authorization': f'Bearer {DATABRICKS_TOKEN}', 'Content-Type': 'application/json'}
-
-# user_id = 2
-# ts = "2022-08-02T00:17:10.875Z" 
-
-data = {
-  "dataframe_records": [{"user_id": user_id,
-                         "ts": ts}]
-}
-
-data_json = json.dumps(data, allow_nan=True)
-
-response = requests.request(method='POST', headers=headers, url=url, data=data_json)
-if response.status_code != 200:
-  raise Exception(f'Request failed with status {response.status_code}, {response.text}')
-
-print(response.json())
-
-# COMMAND ----------
-
-# table = f"{catalog}.{db}.availability_features"
-# availability = 992
-# booking_date = "2022-12-28" 
-# event_ts = f"{booking_date}T13:00:00Z"
-# destination_id = 9
-# name = "Virginia Beach, Virginia"
-# price = 1230
-
-# write_json_to_databricks(
-#     992,
-#     booking_date,
-#     destination_id,
-#     f"{booking_date}T13:00:00Z",
-#     "Virginia Beach, Virginia",
-#     1230,
-#     source_path
-# )
-# warehouse_id = "5ab5dda58c1ea16b"
-# sql_statement = f"""INSERT INTO {table} (availability, booking_date, destination_id, ts, name, price) VALUES ("{availability}", "{booking_date}", "{destination_id}", "{event_ts}", "{name}", "{price}")"""
-# result = w.statement_execution.execute_statement(
-#     warehouse_id=warehouse_id,
-#     catalog=catalog,
-#     schema=db,
-#     statement=sql_statement,
-#     wait_timeout="0s"
-# )
-# result
-
-# COMMAND ----------
-
-w.statement_execution.get_statement(result.statement_id)
-
-# COMMAND ----------
-
-w.online_tables.get("main.alex_m.availability_features_online")
-
-# COMMAND ----------
-
-workspace_url = "https://" + spark.conf.get("spark.databricks.workspaceUrl")
-os.environ['DATABRICKS_TOKEN'] = DATABRICKS_TOKEN = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
-
-url = f"{workspace_url}/serving-endpoints/{endpoint_name}/invocations"
-
-headers = {'Authorization': f'Bearer {DATABRICKS_TOKEN}', 'Content-Type': 'application/json'}
-
-destination_id = 9
-booking_date = "2022-12-25" 
-
-data = {
-  "dataframe_records": [{"destination_id": destination_id,
-                         "booking_date": booking_date}]
-}
-
-data_json = json.dumps(data, allow_nan=True)
-
-response = requests.request(method='POST', headers=headers, url=url, data=data_json)
-if response.status_code != 200:
-  raise Exception(f'Request failed with status {response.status_code}, {response.text}')
-
-print(response.json())
 
 # COMMAND ----------
 
