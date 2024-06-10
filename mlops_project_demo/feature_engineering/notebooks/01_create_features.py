@@ -18,6 +18,9 @@ if reset_all_data.lower() == "true":
 else:
   reset_all_data = False
 
+print(f"Catalog: {catalog}")
+print(f"Schema: {schema}")
+
 # COMMAND ----------
 
 # DBTITLE 1,Setup initialization
@@ -29,6 +32,8 @@ dbdemos.setup_schema(catalog, db, reset_all_data=reset_all_data)
 # COMMAND ----------
 
 # DBTITLE 1,Setup feature datasets
+from pyspark.sql import functions as F
+
 if not spark.catalog.tableExists("destination_location"):
   print(f"Creating destination location table")
   destination_location_df = spark.read.option("inferSchema", "true").load("/databricks-datasets/travel_recommendations_realtime/raw_travel_data/fs-demo_destination-locations/",  format="csv", header="true")
@@ -72,9 +77,6 @@ if not spark.catalog.tableExists("destination_location"):
 # MAGIC %sql SELECT * FROM destination_location
 
 # COMMAND ----------
-
-#Delete potential existing tables to reset all the demo
-# delete_fss(catalog, db, ["user_features", "destination_features", "destination_location_features", "availability_features"])
 
 from mlops_project_demo.feature_engineering.features.helper_functions import (
   write_feature_table, 
@@ -149,7 +151,7 @@ destination_availability_stream = (
   .withColumnRenamed("event_ts", "ts")
 )
 
-dbdemos.stop_all_streams_asynch(sleep_time=30)
+# dbdemos.stop_all_streams_asynch(sleep_time=30)
 display(destination_availability_stream)
 
 # COMMAND ----------
