@@ -5,15 +5,9 @@
 # COMMAND ----------
 
 dbutils.widgets.text("catalog", "dev")
-dbutils.widgets.text("schema", "mlops_project_demo")
-dbutils.widgets.text("table", "dbdemos_fs_travel")
 dbutils.widgets.text("reset_all_data", "false")
-dbutils.widgets.text("suffix", "alex_miller")
 
-suffix = dbutils.widgets.get("suffix")
 catalog = dbutils.widgets.get("catalog")
-schema = db = dbutils.widgets.get("schema")
-table = dbutils.widgets.get("table")
 reset_all_data = dbutils.widgets.get("reset_all_data")
 if reset_all_data.lower() == "true":
   reset_all_data = True
@@ -21,48 +15,6 @@ else:
   reset_all_data = False
 
 print(f"Catalog: {catalog}")
-print(f"Schema: {schema}")
-
-# COMMAND ----------
-
-# # List of input args needed to run this notebook as a job.
-# # Provide them via DB widgets or notebook arguments.
-
-# # Notebook Environment
-# dbutils.widgets.dropdown("env", "staging", ["staging", "prod"], "Environment Name")
-# env = dbutils.widgets.get("env")
-
-# # Path to the Hive-registered Delta table containing the training data.
-# dbutils.widgets.text(
-#     "training_data_path",
-#     "/databricks-datasets/nyctaxi-with-zipcodes/subsampled",
-#     label="Path to the training data",
-# )
-
-# # MLflow experiment name.
-# dbutils.widgets.text(
-#     "experiment_name",
-#     f"/dev-mlops_project_demo-experiment",
-#     label="MLflow experiment name",
-# )
-# # Unity Catalog registered model name to use for the trained mode.
-# dbutils.widgets.text(
-#     "model_name", "dev.mlops_project_demo.mlops_project_demo-model", label="Full (Three-Level) Model Name"
-# )
-
-# # Pickup features table name
-# dbutils.widgets.text(
-#     "pickup_features_table",
-#     "dev.mlops_project_demo.trip_pickup_features",
-#     label="Pickup Features Table",
-# )
-
-# # Dropoff features table name
-# dbutils.widgets.text(
-#     "dropoff_features_table",
-#     "dev.mlops_project_demo.trip_dropoff_features",
-#     label="Dropoff Features Table",
-# )
 
 # COMMAND ----------
 
@@ -70,6 +22,9 @@ print(f"Schema: {schema}")
 from mlops_project_demo.utils.setup_init import DBDemos
 
 dbdemos = DBDemos()
+current_user = dbdemos.get_username()
+schema = db = f'mlops_project_demo_{current_user}'
+experiment_path = f"/Shared/mlops-workshop/experiments/hyperopt-feature-store-{current_user}"
 dbdemos.setup_schema(catalog, db, reset_all_data=reset_all_data)
 
 # COMMAND ----------

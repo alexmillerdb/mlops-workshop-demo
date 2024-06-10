@@ -5,13 +5,9 @@
 # COMMAND ----------
 
 dbutils.widgets.text("catalog", "dev")
-dbutils.widgets.text("schema", "mlops_project_demo")
-dbutils.widgets.text("table", "dbdemos_fs_travel")
 dbutils.widgets.text("reset_all_data", "false")
 
 catalog = dbutils.widgets.get("catalog")
-schema = db = dbutils.widgets.get("schema")
-table = dbutils.widgets.get("table")
 reset_all_data = dbutils.widgets.get("reset_all_data")
 if reset_all_data.lower() == "true":
   reset_all_data = True
@@ -19,7 +15,6 @@ else:
   reset_all_data = False
 
 print(f"Catalog: {catalog}")
-print(f"Schema: {schema}")
 
 # COMMAND ----------
 
@@ -27,6 +22,9 @@ print(f"Schema: {schema}")
 from mlops_project_demo.utils.setup_init import DBDemos
 
 dbdemos = DBDemos()
+current_user = dbdemos.get_username()
+schema = db = f'mlops_project_demo_{current_user}'
+experiment_path = f"/Shared/mlops-workshop/experiments/hyperopt-feature-store-{current_user}"
 dbdemos.setup_schema(catalog, db, reset_all_data=reset_all_data)
 
 # COMMAND ----------

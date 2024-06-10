@@ -1,19 +1,25 @@
 # Databricks notebook source
+# MAGIC %load_ext autoreload
+# MAGIC %autoreload 2
+
+# COMMAND ----------
+
+# MAGIC %md ## Update widgets to avoid overwriting assets.
+# MAGIC - catalog: for interactive development use "dev"
+# MAGIC - schema: use your own schema name to track all UC assets (model, tables, functions)
+# MAGIC - reset_all_data: set to false unless you want to delete assets and start demo over
+
+# COMMAND ----------
+
 # MAGIC %pip install databricks-feature-engineering==0.2.0 databricks-sdk==0.20.0
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
 dbutils.widgets.text("catalog", "dev")
-dbutils.widgets.text("schema", "mlops_project_demo")
-dbutils.widgets.text("table", "dbdemos_fs_travel")
 dbutils.widgets.text("reset_all_data", "false")
-dbutils.widgets.text("suffix", "alex_miller")
 
-suffix = dbutils.widgets.get("suffix")
 catalog = dbutils.widgets.get("catalog")
-schema = db = dbutils.widgets.get("schema")
-table = dbutils.widgets.get("table")
 reset_all_data = dbutils.widgets.get("reset_all_data")
 if reset_all_data.lower() == "true":
   reset_all_data = True
@@ -21,7 +27,6 @@ else:
   reset_all_data = False
 
 print(f"Catalog: {catalog}")
-print(f"Schema: {schema}")
 
 # COMMAND ----------
 
@@ -29,6 +34,9 @@ print(f"Schema: {schema}")
 from mlops_project_demo.utils.setup_init import DBDemos
 
 dbdemos = DBDemos()
+current_user = dbdemos.get_username()
+schema = db = f'mlops_project_demo_{current_user}'
+experiment_path = f"/Shared/mlops-workshop/experiments/hyperopt-feature-store-{current_user}"
 dbdemos.setup_schema(catalog, db, reset_all_data=reset_all_data)
 
 # COMMAND ----------
@@ -215,8 +223,7 @@ search_space = {
 }
 
 # Set mlflow experiment path to track hyperopt runs
-xp_path = f"/Shared/mlops-workshop/experiments/hyperopt-feature-store-{suffix}"
-experiment = mlflow.set_experiment(experiment_name=xp_path)
+experiment = mlflow.set_experiment(experiment_name=experiment_path)
 
 # COMMAND ----------
 
