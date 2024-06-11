@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: databricks/setup-cli@v0.221.0
+      - uses: databricks/setup-cli@v0.221.1
       - name: Validate Bundle For Staging
         id: validate
         run: |

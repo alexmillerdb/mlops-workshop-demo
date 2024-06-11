@@ -3,7 +3,7 @@ from pyspark.sql import functions as F
 from pyspark.sql import Window
 import pytest
 import pandas as pd
-from datetime import datetime
+import datetime
 from pyspark.sql import SparkSession
 
 from mlops_project_demo.feature_engineering.features.helper_functions import (

@@ -4,8 +4,8 @@
   "input_cicd_platform": "github_actions",
   "input_default_branch": "main",
   "input_release_branch": "release",
-  "cloud_specific_node_type_id": "v0.221.0",
-  "input_cli_version": "v0.221.0",
+  "cloud_specific_node_type_id": "v0.221.1",
+  "input_cli_version": "v0.221.1",
   "test_catalog_name": "test",
   "staging_catalog_name": "staging",
   "prod_catalog_name": "prod"
