@@ -31,7 +31,19 @@ print(f"Catalog: {catalog}")
 
 # COMMAND ----------
 
-from mlops_project_demo.utils.setup_init import DBDemos
+import sys
+import os
+notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
+current_directory = os.getcwd()
+root_directory = os.path.normpath(os.path.join(current_directory, '..', '..', '..'))
+%cd $notebook_path
+%cd ..
+sys.path.append("../..")
+sys.path.append(root_directory)
+
+# COMMAND ----------
+
+from utils.setup_init import DBDemos
 
 dbdemos = DBDemos()
 current_user = dbdemos.get_username()
@@ -84,7 +96,7 @@ print(f"Endpoint Name: {endpoint_name}")
 # COMMAND ----------
 
 # DBTITLE 1,Create online feature tables
-from mlops_project_demo.deployment.model_serving.deploy_utils import (
+from deployment.model_serving.deploy_utils import (
     create_online_table,
     wait_for_online_tables,
     online_table_exists,
