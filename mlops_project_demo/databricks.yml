@@ -6,7 +6,7 @@ bundle:
 variables:
   experiment_name:
     description: Experiment name for the model training.
-    default: /Shared/mlops-workshop/experiments/hyperopt-feature-store-alex_miller
+    default: /Shared/mlops-workshop/experiments/${bundle.target}-hyperopt-feature-store-alex_miller
   model_name:
     description: Model name for the model training.
     default: hyperopt_feature_store
