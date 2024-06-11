@@ -6,13 +6,16 @@ bundle:
 variables:
   experiment_name:
     description: Experiment name for the model training.
-    default: /Users/${workspace.current_user.userName}/${bundle.target}-mlops_project_demo-experiment
+    default: /Shared/mlops-workshop/experiments/hyperopt-feature-store-alex_miller
   model_name:
     description: Model name for the model training.
-    default: mlops_project_demo-model
-  schema_suffix:
-    description: Schema suffix for the feature store.
-    default: am
+    default: hyperopt_feature_store
+  catalog:
+    description: Unity Catalog name for the model registration.
+    default: ${bundle.target}
+  schema: 
+    description: Schema name for the model registration.
+    default: mlops_project_demo_alex_miller
 
 include:
   # Resources folder contains ML artifact resources for the ML project that defines model and experiment
@@ -27,8 +30,6 @@ targets:
     workspace:
       # TODO: add dev workspace URL
       host: https://e2-demo-field-eng.cloud.databricks.com
-
-
 
   staging:
     workspace:
