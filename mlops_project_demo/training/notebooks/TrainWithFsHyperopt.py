@@ -10,6 +10,7 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Move to training path and install requirements.txt
 import os
 notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
 %cd $notebook_path
@@ -21,11 +22,6 @@ notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.ge
 # COMMAND ----------
 
 dbutils.library.restartPython()
-
-# COMMAND ----------
-
-# %pip install databricks-feature-engineering==0.2.0 databricks-sdk==0.20.0
-# dbutils.library.restartPython()
 
 # COMMAND ----------
 
@@ -43,8 +39,21 @@ print(f"Catalog: {catalog}")
 
 # COMMAND ----------
 
+# DBTITLE 1,Setup system paths to import python modules
+import sys
+import os
+notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
+current_directory = os.getcwd()
+root_directory = os.path.normpath(os.path.join(current_directory, '..', '..'))
+%cd $notebook_path
+%cd ..
+sys.path.append("../..")
+sys.path.append(root_directory)
+
+# COMMAND ----------
+
 # DBTITLE 1,Setup initialization
-from mlops_project_demo.utils.setup_init import DBDemos
+from utils.setup_init import DBDemos
 
 dbdemos = DBDemos()
 current_user = dbdemos.get_username()
@@ -383,6 +392,7 @@ mlflow.end_run()
 # Querying mlflow api instead of using web UI. Sorting by validation aucroc and then getting top run for best run.
 runs_df = mlflow.search_runs(experiment_ids=experiment.experiment_id, order_by=['metrics.validation_aucroc DESC'])
 best_run = runs_df.iloc[0]
+
 # extracting parameters, metrics, and metadata
 metric_cols = [col for col in runs_df.columns if col.startswith('metrics.')]
 param_cols = [col for col in runs_df.columns if col.startswith('params.')]
@@ -456,6 +466,7 @@ with mlflow.start_run(run_name="best_hyperopt_fs", experiment_id=experiment.expe
     flavor=mlflow.sklearn, # flavour of the model (our LightGBM model has a SkLearn Flavour)
     training_set=training_set, # training set you used to train your model with AutoML
     input_example=x_sample, # Dataset example (Pandas dataframe)
+    signature=signature,
     registered_model_name=model_full_name, # register your best model
     conda_env=env,
     pyfunc_predict_fn="predict" # can also set to "predict_proba"
@@ -473,26 +484,33 @@ mlflow.end_run()
 
 # COMMAND ----------
 
-# DBTITLE 1,PyFunc model class wrapper for more customization
+# DBTITLE 1,Customize predict method using PyFunc
 from mlflow.pyfunc import PythonModel
 
+# for more details visit: https://mlflow.org/docs/latest/traditional-ml/creating-custom-pyfunc/notebooks/override-predict.html
 class ModelWrapper(PythonModel):
-  def __init__(self, model):
-        self.model = model
+    def __init__(self):
+        self.model = None
+    
+    def load_context(self, context):
+        """
+        Load the model from specified artifacts directory
+        """
+        model_file_path = context.artifacts["model_file"]
+        self.model = mlflow.xgboost.load_model(model_file_path)
 
-  def predict(self, context, model_input, params={"predict_method": "predict_proba"}):
+    def predict(self, context, model_input, params={"predict_method": "predict_proba"}):
         params = params or {"predict_method": "predict"}
         predict_method = params.get("predict_method")
 
         if predict_method == "predict":
             return self.model.predict(model_input)
         elif predict_method == "predict_proba":
-            return self.model.predict_proba(model_input)[:,1]
+            return self.model.predict_proba(model_input)[:, 1]
         else:
-            raise ValueError(f"The prediction method '{predict_method}' is not supported.")
-
-test = ModelWrapper(best_model)
-test.predict(context="", model_input=X_test.iloc[0:5], params={"predict_method": "predict_proba"})
+            raise ValueError(
+                f"The prediction method '{predict_method}' is not supported."
+            )
 
 # COMMAND ----------
 
@@ -521,11 +539,14 @@ with mlflow.start_run(run_name="best_hyperopt_fs", experiment_id=experiment.expe
   # define signature with the model
   signature = infer_signature(x_sample, params={"predict_method": "predict_proba"})
   
+  artifacts = {"model_file": f"runs:/{best_run_id}/model"}
+
   #Use the feature store client to log our best model
   # log as pyfunc
   fe.log_model(
-    model=ModelWrapper(best_model), # object of your model,
-    artifact_path="model", #name of the Artifact under MlFlow
+    model=ModelWrapper(), # object of your model,
+    artifact_path="model",
+    artifacts=artifacts, #name of the Artifact under MlFlow
     flavor=mlflow.pyfunc, # flavour of the model (our LightGBM model has a SkLearn Flavour)
     training_set=training_set, # training set you used to train your model with AutoML
     signature=signature,
@@ -547,7 +568,7 @@ mlflow.end_run()
 # COMMAND ----------
 
 # DBTITLE 1,Batch scoring on the test set using PyFunc
-from mlops_project_demo.training.utils.helper_functions import get_last_model_version
+from training.utils.helper_functions import get_last_model_version
 
 #Create the training set
 test_set = fe.create_training_set(
@@ -563,7 +584,7 @@ y_test = test_set_df['purchased']
 
 model_version = get_last_model_version(model_full_name + "_pyfunc")
 score_batch = fe.score_batch(
-  model_uri='models:/dev.mlops_project_demo_alex_miller.hyperopt_feature_store_pyfunc/3', 
+  model_uri=f'models:/dev.mlops_project_demo_alex_miller.hyperopt_feature_store_pyfunc/{model_version.version}', 
   df=test_df).toPandas()
 
 # Predicting and evaluating best model on holdout set
