@@ -15,7 +15,7 @@ env:
 
 jobs:
   cicd:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Get current timestamp
         id: timestamp

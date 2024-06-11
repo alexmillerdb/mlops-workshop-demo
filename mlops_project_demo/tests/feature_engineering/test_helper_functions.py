@@ -59,7 +59,6 @@ def test_create_user_features(spark):
     expected = expected_df.collect()
 
     # Compare the actual output with the expected output
-    assert isinstance(result, pyspark.sql.DataFrame)
     assert result == expected, "The create_user_features function did not return the expected result."
 
 @pytest.mark.usefixtures("spark")
