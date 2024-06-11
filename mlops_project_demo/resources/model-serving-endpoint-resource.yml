@@ -1,0 +1,19 @@
+# # yaml-language-server: $schema=../bundle_config_schema.json
+
+# # Defines model and experiments
+# resources:
+#   model_serving_endpoints:
+#     model_serving_endpoint_task:
+#       name: ${var.model_name}_${workspace.current_user.short_name}_endpoint
+#       config:
+#         served_entities:
+#           - entity_name: ${bundle.target}.${var.schema}.${var.model_name}
+#           - entity_version: "10"
+#           - workload_size: "Small" 
+#           # - workload_type: "CPU"
+#           - scale_to_zero_enabled: True
+#         auto_capture_config:
+#           enabled: true
+#           catalog_name: ${bundle.target}
+#           schema_name: ${var.schema}
+#       route_optimized: True
