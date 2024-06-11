@@ -27,8 +27,20 @@ print(f"Catalog: {catalog}")
 
 # COMMAND ----------
 
+import sys
+import os
+notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
+current_directory = os.getcwd()
+root_directory = os.path.normpath(os.path.join(current_directory, '..', '..'))
+%cd $notebook_path
+%cd ..
+sys.path.append("../..")
+sys.path.append(root_directory)
+
+# COMMAND ----------
+
 # DBTITLE 1,Setup initialization
-from mlops_project_demo.utils.setup_init import DBDemos
+from utils.setup_init import DBDemos
 
 dbdemos = DBDemos()
 current_user = dbdemos.get_username()

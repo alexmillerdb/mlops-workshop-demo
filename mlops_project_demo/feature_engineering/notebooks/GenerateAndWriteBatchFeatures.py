@@ -27,8 +27,20 @@ print(f"Catalog: {catalog}")
 
 # COMMAND ----------
 
+import sys
+import os
+notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
+current_directory = os.getcwd()
+root_directory = os.path.normpath(os.path.join(current_directory, '..', '..'))
+%cd $notebook_path
+%cd ..
+sys.path.append("../..")
+sys.path.append(root_directory)
+
+# COMMAND ----------
+
 # DBTITLE 1,Setup initialization
-from mlops_project_demo.utils.setup_init import DBDemos
+from utils.setup_init import DBDemos
 
 dbdemos = DBDemos()
 current_user = dbdemos.get_username()
@@ -85,7 +97,7 @@ if not spark.catalog.tableExists("destination_location"):
 
 # COMMAND ----------
 
-from mlops_project_demo.feature_engineering.features.helper_functions import (
+from feature_engineering.features.helper_functions import (
   write_feature_table, 
   create_user_features, 
   destination_features_fn,
