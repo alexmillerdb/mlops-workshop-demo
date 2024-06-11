@@ -51,6 +51,10 @@ class DBDemos:
         if volume_name:
             self.spark.sql(f'CREATE VOLUME IF NOT EXISTS {volume_name};')
 
+    def get_username(self):
+        current_user = self.spark.sql("SELECT current_user() as username").collect()[0].username
+        return current_user.split("@")[0].replace(".","_")
+
     @staticmethod
     def is_folder_empty(folder):
         try:

@@ -15,7 +15,7 @@ env:
 
 jobs:
   cicd:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Get current timestamp
         id: timestamp
@@ -25,7 +25,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.WORKFLOW_TOKEN }}
-      - uses: databricks/setup-cli@v0.221.0
+      - uses: databricks/setup-cli@v0.221.1
       - name: Convert Project Name to Only Alphanumeric Characters
         run: |
           PROJECT_NAME_ALPHA=$(echo "${{ github.event.inputs.project_name }}" | tr ' -' '_')

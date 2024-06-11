@@ -1,38 +1,4 @@
 # Databricks notebook source
-##################################################################################
-# Batch Inference Notebook
-#
-# This notebook is an example of applying a model for batch inference against an input delta table,
-# It is configured and can be executed as the batch_inference_job in the batch_inference_job workflow defined under
-# ``mlops_project_demo/resources/batch-inference-workflow-resource.yml``
-#
-# Parameters:
-#
-#  * env (optional)  - String name of the current environment (dev, staging, or prod). Defaults to "dev"
-#  * input_table_name (required)  - Delta table name containing your input data.
-#  * output_table_name (required) - Delta table name where the predictions will be written to.
-#                                   Note that this will create a new version of the Delta table if
-#                                   the table already exists
-#  * model_name (required) - The name of the model to be used in batch inference.
-##################################################################################
-
-
-# List of input args needed to run the notebook as a job.
-# Provide them via DB widgets or notebook arguments.
-#
-# Name of the current environment
-dbutils.widgets.dropdown("env", "dev", ["dev", "staging", "prod"], "Environment Name")
-# A Hive-registered Delta table containing the input features.
-dbutils.widgets.text("input_table_name", "", label="Input Table Name")
-# Delta table to store the output predictions.
-dbutils.widgets.text("output_table_name", "", label="Output Table Name")
-# Unity Catalog registered model name to use for the trained mode.
-dbutils.widgets.text(
-    "model_name", "dev.mlops_project_demo.mlops_project_demo-model", label="Full (Three-Level) Model Name"
-)
-
-# COMMAND ----------
-
 import os
 
 notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
@@ -48,6 +14,58 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
+dbutils.widgets.text("catalog", "dev")
+dbutils.widgets.text("reset_all_data", "false")
+dbutils.widgets.text("input_table_name", "travel_purchase", label="Input Table Name")
+dbutils.widgets.text("output_table_name", "travel_purchase_prediction", label="Output Table Name")
+
+catalog = dbutils.widgets.get("catalog")
+reset_all_data = dbutils.widgets.get("reset_all_data")
+input_table_name = dbutils.widgets.get("input_table_name")
+output_table_name = dbutils.widgets.get("output_table_name")
+
+if reset_all_data.lower() == "true":
+  reset_all_data = True
+else:
+  reset_all_data = False
+
+print(f"Catalog: {catalog}")
+
+# COMMAND ----------
+
+from mlops_project_demo.utils.setup_init import DBDemos
+
+dbdemos = DBDemos()
+current_user = dbdemos.get_username()
+schema = db = f'mlops_project_demo_{current_user}'
+input_table_name = f"{catalog}.{db}.{input_table_name}"
+experiment_path = f"/Shared/mlops-workshop/experiments/hyperopt-feature-store-{current_user}"
+dbdemos.setup_schema(catalog, db, reset_all_data=reset_all_data)
+
+# COMMAND ----------
+
+if catalog.lower() == "dev":
+  model_alias_to_evaluate = "Dev"
+  model_alias_updated = "Staging"
+if catalog.lower() == "staging":
+  model_alias_to_evaluate = "Staging"
+  model_alias_updated = "Challenger"
+if catalog.lower() == "prod":
+  model_alias_to_evaluate = "Challenger"
+  model_alias_updated = "Champion"
+
+# COMMAND ----------
+
+import mlflow
+from mlflow import MlflowClient
+
+mlflow.set_registry_uri('databricks-uc')
+model_name = f"hyperopt_feature_store"
+model_full_name = f"{catalog}.{db}.{model_name}"
+model_uri = f"models:/{model_full_name}@{model_alias_updated}"
+
+# COMMAND ----------
+
 import sys
 import os
 notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
@@ -57,25 +75,11 @@ sys.path.append("../..")
 
 # COMMAND ----------
 
-# DBTITLE 1,Define input and output variables
-
-env = dbutils.widgets.get("env")
-input_table_name = dbutils.widgets.get("input_table_name")
-output_table_name = dbutils.widgets.get("output_table_name")
-model_name = dbutils.widgets.get("model_name")
-assert input_table_name != "", "input_table_name notebook parameter must be specified"
-assert output_table_name != "", "output_table_name notebook parameter must be specified"
-assert model_name != "", "model_name notebook parameter must be specified"
-alias = "Champion"
-model_uri = f"models:/{model_name}@{alias}"
-
-# COMMAND ----------
-
 from mlflow import MlflowClient
 
 # Get model version from alias
 client = MlflowClient(registry_uri="databricks-uc")
-model_version = client.get_model_version_by_alias(model_name, alias).version
+model_version = client.get_model_version_by_alias(model_full_name, model_alias_updated).version
 
 # COMMAND ----------
 
@@ -85,7 +89,6 @@ from datetime import datetime
 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # COMMAND ----------
-# DBTITLE 1,Load model and run inference
 
 from predict import predict_batch
 

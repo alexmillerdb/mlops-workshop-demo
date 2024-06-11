@@ -1,19 +1,38 @@
 # Databricks notebook source
-# MAGIC %pip install databricks-feature-engineering==0.2.0 databricks-sdk==0.20.0
-# MAGIC dbutils.library.restartPython()
+# MAGIC %load_ext autoreload
+# MAGIC %autoreload 2
+
+# COMMAND ----------
+
+# MAGIC %md ## Update widgets to avoid overwriting assets.
+# MAGIC - catalog: for interactive development use "dev"
+# MAGIC - reset_all_data: set to false unless you want to delete assets and start demo over
+
+# COMMAND ----------
+
+import os
+notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
+%cd $notebook_path
+
+# COMMAND ----------
+
+# MAGIC %pip install -r ../../requirements.txt
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+# %pip install databricks-feature-engineering==0.2.0 databricks-sdk==0.20.0
+# dbutils.library.restartPython()
 
 # COMMAND ----------
 
 dbutils.widgets.text("catalog", "dev")
-dbutils.widgets.text("schema", "mlops_project_demo")
-dbutils.widgets.text("table", "dbdemos_fs_travel")
 dbutils.widgets.text("reset_all_data", "false")
-dbutils.widgets.text("suffix", "alex_miller")
 
-suffix = dbutils.widgets.get("suffix")
 catalog = dbutils.widgets.get("catalog")
-schema = db = dbutils.widgets.get("schema")
-table = dbutils.widgets.get("table")
 reset_all_data = dbutils.widgets.get("reset_all_data")
 if reset_all_data.lower() == "true":
   reset_all_data = True
@@ -21,7 +40,6 @@ else:
   reset_all_data = False
 
 print(f"Catalog: {catalog}")
-print(f"Schema: {schema}")
 
 # COMMAND ----------
 
@@ -29,6 +47,9 @@ print(f"Schema: {schema}")
 from mlops_project_demo.utils.setup_init import DBDemos
 
 dbdemos = DBDemos()
+current_user = dbdemos.get_username()
+schema = db = f'mlops_project_demo_{current_user}'
+experiment_path = f"/Shared/mlops-workshop/experiments/hyperopt-feature-store-{current_user}"
 dbdemos.setup_schema(catalog, db, reset_all_data=reset_all_data)
 
 # COMMAND ----------
@@ -95,6 +116,13 @@ training_keys = spark.table('travel_purchase').select('ts', 'purchased', 'destin
 training_df = training_keys.where("ts < '2022-11-23'")
 test_df = training_keys.where("ts >= '2022-11-23'").cache()
 
+# Save train/test set to delta table for future reuse and trackability
+training_df.write.format("delta").mode("overwrite").saveAsTable("training_set")
+test_df.write.format("delta").mode("overwrite").saveAsTable("test_set")
+
+# pull feature store version at the time of the training and log to MLflow later
+fs_version = spark.sql("DESCRIBE HISTORY training_set").orderBy("version", ascending=False).select("version").first()[0]
+
 display(training_df.limit(5))
 
 # COMMAND ----------
@@ -152,7 +180,6 @@ training_set = fe.create_training_set(
 )
 
 # COMMAND ----------
-
 
 training_set_df = training_set.load_df()
 #Let's cache the training dataset for automl (to avoid recomputing it everytime)
@@ -215,8 +242,7 @@ search_space = {
 }
 
 # Set mlflow experiment path to track hyperopt runs
-xp_path = f"/Shared/mlops-workshop/experiments/hyperopt-feature-store-{suffix}"
-experiment = mlflow.set_experiment(experiment_name=xp_path)
+experiment = mlflow.set_experiment(experiment_name=experiment_path)
 
 # COMMAND ----------
 
@@ -397,7 +423,9 @@ print(f'Testing AUCROC: {test_aucroc}')
 
 # COMMAND ----------
 
+# DBTITLE 1,Log using Sklearn flavor
 import mlflow
+from mlflow.models import infer_signature
 import os
 import datetime
 
@@ -416,7 +444,12 @@ with open(artifacts_path+"model/requirements.txt", 'r') as f:
 
 #Create a new run in the same experiment as our hyperopt run.
 with mlflow.start_run(run_name="best_hyperopt_fs", experiment_id=experiment.experiment_id) as run:
+
+  # define signature with the model
+  signature = infer_signature(x_sample, params={"predict_method": "predict_proba"})
+
   #Use the feature store client to log our best model
+  # log as sklearn
   fe.log_model(
     model=best_model, # object of your model
     artifact_path="model", #name of the Artifact under MlFlow
@@ -424,6 +457,80 @@ with mlflow.start_run(run_name="best_hyperopt_fs", experiment_id=experiment.expe
     training_set=training_set, # training set you used to train your model with AutoML
     input_example=x_sample, # Dataset example (Pandas dataframe)
     registered_model_name=model_full_name, # register your best model
+    conda_env=env,
+    pyfunc_predict_fn="predict" # can also set to "predict_proba"
+    )
+
+  #Copy best run images & params to our FS run
+  for item in os.listdir(artifacts_path):
+    if item.endswith(".png") or item.endswith(".json"):
+      mlflow.log_artifact(artifacts_path+item)
+  mlflow.log_metrics(best_run_metrics_dict)
+  mlflow.log_params(best_run_params_dict)
+  mlflow.log_param("run_id", best_run_id)
+
+mlflow.end_run()
+
+# COMMAND ----------
+
+# DBTITLE 1,PyFunc model class wrapper for more customization
+from mlflow.pyfunc import PythonModel
+
+class ModelWrapper(PythonModel):
+  def __init__(self, model):
+        self.model = model
+
+  def predict(self, context, model_input, params={"predict_method": "predict_proba"}):
+        params = params or {"predict_method": "predict"}
+        predict_method = params.get("predict_method")
+
+        if predict_method == "predict":
+            return self.model.predict(model_input)
+        elif predict_method == "predict_proba":
+            return self.model.predict_proba(model_input)[:,1]
+        else:
+            raise ValueError(f"The prediction method '{predict_method}' is not supported.")
+
+test = ModelWrapper(best_model)
+test.predict(context="", model_input=X_test.iloc[0:5], params={"predict_method": "predict_proba"})
+
+# COMMAND ----------
+
+# DBTITLE 1,Log using PyFunc flavor
+import mlflow
+from mlflow.models import infer_signature
+import os
+import datetime
+
+mlflow.set_registry_uri('databricks-uc')
+model_name = f"hyperopt_feature_store"
+model_full_name = f"{catalog}.{db}.{model_name}"
+
+# creating sample input to be logged (do not include the live features in the schema as they'll be computed within the model)
+x_sample = X_train.head(10)
+
+#Get the conda env from hyperopt run
+artifacts_path = mlflow.artifacts.download_artifacts(run_id=best_run_id)
+env = mlflow.pyfunc.get_default_conda_env()
+with open(artifacts_path+"model/requirements.txt", 'r') as f:
+    env['dependencies'][-1]['pip'] = f.read().split('\n')
+
+#Create a new run in the same experiment as our hyperopt run.
+with mlflow.start_run(run_name="best_hyperopt_fs", experiment_id=experiment.experiment_id) as run:
+
+  # define signature with the model
+  signature = infer_signature(x_sample, params={"predict_method": "predict_proba"})
+  
+  #Use the feature store client to log our best model
+  # log as pyfunc
+  fe.log_model(
+    model=ModelWrapper(best_model), # object of your model,
+    artifact_path="model", #name of the Artifact under MlFlow
+    flavor=mlflow.pyfunc, # flavour of the model (our LightGBM model has a SkLearn Flavour)
+    training_set=training_set, # training set you used to train your model with AutoML
+    signature=signature,
+    input_example=x_sample, # Dataset example (Pandas dataframe)
+    registered_model_name=model_full_name + "_pyfunc", # register your best model
     conda_env=env
     )
 
@@ -439,13 +546,53 @@ mlflow.end_run()
 
 # COMMAND ----------
 
+# DBTITLE 1,Batch scoring on the test set using PyFunc
+from mlops_project_demo.training.utils.helper_functions import get_last_model_version
+
+#Create the training set
+test_set = fe.create_training_set(
+    df=test_df,
+    feature_lookups=feature_lookups,
+    exclude_columns=['user_id', 'destination_id', 'booking_date', 'clicked', 'price'],
+    label='purchased'
+)
+
+test_set_df = test_set.load_df().toPandas()
+X_test = test_set_df.drop(columns=['purchased', 'ts'])
+y_test = test_set_df['purchased']
+
+model_version = get_last_model_version(model_full_name + "_pyfunc")
+score_batch = fe.score_batch(
+  model_uri='models:/dev.mlops_project_demo_alex_miller.hyperopt_feature_store_pyfunc/3', 
+  df=test_df).toPandas()
+
+# Predicting and evaluating best model on holdout set
+y_test_pred_proba = 1 - score_batch['prediction']
+y_test_pred_proba = score_batch['prediction']
+y_test_pred = (y_test_pred_proba >= 0.5).astype(int)
+
+test_accuracy = accuracy_score(y_test, y_test_pred).round(3)
+test_precision = precision_score(y_test, y_test_pred).round(3)
+test_recall = recall_score(y_test, y_test_pred).round(3)
+test_f1 = f1_score(y_test, y_test_pred).round(3)
+test_aucroc = roc_auc_score(y_test, y_test_pred_proba).round(3)
+
+print(f'Testing Accuracy: {test_accuracy}')
+print(f'Testing Precision: {test_precision}')
+print(f'Testing Recall: {test_recall}')
+print(f'Testing F1: {test_f1}')
+print(f'Testing AUCROC: {test_aucroc}')
+
+# COMMAND ----------
+
 # DBTITLE 1,Set tags for registered model
 from mlflow.tracking import MlflowClient
-from mlops_project_demo.training.utils.helper_functions import get_last_model_version
 
 client = MlflowClient()
 latest_model = get_last_model_version(model_full_name)
-client.set_model_version_tag(name=model_full_name, version=latest_model.version, key='feature_store', value='hyperopt_demo')
 client.set_model_version_tag(name=model_full_name, version=latest_model.version, key="timestamp", value=datetime.datetime.fromtimestamp(run.info.start_time/1000.0))
 client.set_model_version_tag(name=model_full_name, version=latest_model.version, key="train_date", value=datetime.date.today())
-client.set_model_version_tag(name=model_full_name, version=latest_model.version, key="description", value="Simple model showing how to use MLflow with UC")
+client.set_model_version_tag(name=model_full_name, version=latest_model.version, key="fs_table_version", value=fs_version)
+client.set_model_version_tag(name=model_full_name, version=latest_model.version, key="model_type", value="classifier")
+client.update_model_version(name=model_full_name, version=latest_model.version, description="Simple model showing how to use MLflow with UC")
+client.set_registered_model_alias(name=model_full_name, alias="Dev", version=latest_model.version)
