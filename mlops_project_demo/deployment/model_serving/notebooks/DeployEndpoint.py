@@ -235,14 +235,33 @@ except Exception as e:
 
 # COMMAND ----------
 
-import timeit
+import requests
+import json
 
 test_df = spark.table("test_set")
-lookup_keys = test_df.drop('purchased').limit(2).toPandas().astype({'ts': 'str', 'booking_date': 'str'}).to_dict(orient="records")
-print(f'Compute the propensity score for these customers: {lookup_keys}')
-#Query the endpoint
-for i in range(3):
-    starting_time = timeit.default_timer()
-    inferences = wc.serving_endpoints.query(endpoint_name, inputs=lookup_keys)
-    print(f"Inference time, end 2 end :{round((timeit.default_timer() - starting_time)*1000)}ms")
-    print(inferences)
+lookup_keys = (
+    test_df.drop("purchased")
+    .limit(10)
+    .toPandas()
+    .astype({"ts": "str", "booking_date": "str"})
+    .to_dict(orient="records")
+)
+
+# Get the API endpoint and token for the current notebook context
+API_ROOT = (
+    dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiUrl().get()
+)
+API_TOKEN = (
+    dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+)
+
+data = {"dataframe_records": lookup_keys}
+headers = {"Context-Type": "text/json", "Authorization": f"Bearer {API_TOKEN}"}
+
+response = requests.post(
+    url=f"{API_ROOT}/serving-endpoints/{endpoint_name}/invocations",
+    json=data,
+    headers=headers,
+)
+
+print(json.dumps(response.json()))
