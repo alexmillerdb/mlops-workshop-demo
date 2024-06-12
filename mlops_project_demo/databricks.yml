@@ -15,7 +15,7 @@ variables:
     default: ${bundle.target}
   schema: 
     description: Schema name for the model registration.
-    default: mlops_project_demo_alex_miller
+    default: mlops_project_demo_${workspace.current_user.short_name}
 
 include:
   # Resources folder contains ML artifact resources for the ML project that defines model and experiment
@@ -30,16 +30,20 @@ targets:
     workspace:
       # TODO: add dev workspace URL
       host: https://e2-demo-field-eng.cloud.databricks.com
+      root_path: /Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
 
   staging:
     workspace:
       host: https://e2-demo-field-eng.cloud.databricks.com
+      root_path: /Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
 
   prod:
     workspace:
       host: https://e2-demo-field-eng.cloud.databricks.com
+      root_path: /Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
 
   test:
     workspace:
       host: https://e2-demo-field-eng.cloud.databricks.com
+      root_path: /Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
 

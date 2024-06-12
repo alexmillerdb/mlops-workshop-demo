@@ -27,8 +27,20 @@ print(f"Catalog: {catalog}")
 
 # COMMAND ----------
 
+import sys
+import os
+notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
+current_directory = os.getcwd()
+root_directory = os.path.normpath(os.path.join(current_directory, '..', '..'))
+%cd $notebook_path
+%cd ..
+sys.path.append("../..")
+sys.path.append(root_directory)
+
+# COMMAND ----------
+
 # DBTITLE 1,Setup initialization
-from mlops_project_demo.utils.setup_init import DBDemos
+from utils.setup_init import DBDemos
 
 dbdemos = DBDemos()
 current_user = dbdemos.get_username()
@@ -97,14 +109,15 @@ destination_availability_stream = (
   .option("cloudFiles.schemaEvolutionMode", "rescue")
   .option("cloudFiles.schemaHints", "event_ts timestamp, booking_date date, destination_id int")
   .option("cloudFiles.schemaLocation", f"/Volumes/{catalog}/{db}/feature_store_volume/stream/availability_schema")
-  .option("cloudFiles.maxFilesPerTrigger", 100) #Simulate streaming
+  .option("cloudFiles.maxFilesPerTrigger", 1000) #Simulate streaming
   .load("/databricks-datasets/travel_recommendations_realtime/raw_travel_data/fs-demo_destination-availability_logs/json")
   .drop("_rescued_data")
   .withColumnRenamed("event_ts", "ts")
 )
 
+dbdemos.wait_for_all_stream()
 # dbdemos.stop_all_streams_asynch(sleep_time=30)
-display(destination_availability_stream)
+# display(destination_availability_stream)
 
 # COMMAND ----------
 
