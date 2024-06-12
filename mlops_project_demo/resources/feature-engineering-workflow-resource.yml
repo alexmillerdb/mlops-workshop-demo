@@ -13,7 +13,7 @@ common_permissions: &permissions
 
 resources:
   jobs:
-    write_batch_feature_table_job:
+    write_feature_table_job:
       name: ${bundle.target}-mlops_project_demo-write-feature-table-job
       job_clusters:
         - job_cluster_key: write_feature_table_job_cluster
