@@ -584,7 +584,7 @@ y_test = test_set_df['purchased']
 
 model_version = get_last_model_version(model_full_name + "_pyfunc")
 score_batch = fe.score_batch(
-  model_uri=f'models:/dev.mlops_project_demo_alex_miller.hyperopt_feature_store_pyfunc/{model_version.version}', 
+  model_uri=f'models:/{catalog}.{schema}.hyperopt_feature_store_pyfunc/{model_version.version}', 
   df=test_df).toPandas()
 
 # Predicting and evaluating best model on holdout set
