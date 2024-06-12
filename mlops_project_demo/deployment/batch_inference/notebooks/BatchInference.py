@@ -33,7 +33,19 @@ print(f"Catalog: {catalog}")
 
 # COMMAND ----------
 
-from mlops_project_demo.utils.setup_init import DBDemos
+import sys
+import os
+notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
+current_directory = os.getcwd()
+root_directory = os.path.normpath(os.path.join(current_directory, '..', '..', '..'))
+%cd $notebook_path
+%cd ..
+sys.path.append("../..")
+sys.path.append(root_directory)
+
+# COMMAND ----------
+
+from utils.setup_init import DBDemos
 
 dbdemos = DBDemos()
 current_user = dbdemos.get_username()
@@ -66,15 +78,6 @@ model_uri = f"models:/{model_full_name}@{model_alias_updated}"
 
 # COMMAND ----------
 
-import sys
-import os
-notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
-%cd $notebook_path
-%cd ..
-sys.path.append("../..")
-
-# COMMAND ----------
-
 from mlflow import MlflowClient
 
 # Get model version from alias
@@ -89,6 +92,7 @@ from datetime import datetime
 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # COMMAND ----------
+
 
 from predict import predict_batch
 
