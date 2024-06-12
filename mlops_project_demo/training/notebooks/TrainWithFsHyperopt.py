@@ -616,4 +616,4 @@ client.set_model_version_tag(name=model_full_name, version=latest_model.version,
 client.set_model_version_tag(name=model_full_name, version=latest_model.version, key="fs_table_version", value=fs_version)
 client.set_model_version_tag(name=model_full_name, version=latest_model.version, key="model_type", value="classifier")
 client.update_model_version(name=model_full_name, version=latest_model.version, description="Simple model showing how to use MLflow with UC")
-client.set_registered_model_alias(name=model_full_name, alias="Dev", version=latest_model.version)
+client.set_registered_model_alias(name=model_full_name, alias=catalog, version=latest_model.version)
