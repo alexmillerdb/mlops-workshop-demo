@@ -71,7 +71,7 @@ from mlflow import MlflowClient
 
 mlflow.set_registry_uri('databricks-uc')
 model_name = f"hyperopt_feature_store"
-endpoint_name = f"travel_purchase_predictions_{current_user}"
+endpoint_name = f"{catalog}_travel_purchase_predictions_{current_user}"
 model_full_name = f"{catalog}.{db}.{model_name}"
 model_uri = f"models:/{model_full_name}@{model_alias_updated}"
 

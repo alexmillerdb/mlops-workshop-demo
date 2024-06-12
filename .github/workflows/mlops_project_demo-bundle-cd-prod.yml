@@ -32,3 +32,19 @@ jobs:
         id: deploy
         run: |
           databricks bundle deploy -t prod
+      - name: Run Feature Engineering Workflow for Prod Deployment Target in Prod Workspace
+        id: feature_engineering
+        run: |
+          databricks bundle run write_feature_table_job -t prod
+      - name: Run Training Workflow for Prod Deployment Target in Prod Workspace
+        id: training
+        run: |
+          databricks bundle run model_training_job -t prod
+      - name: Run Batch Inference Workflow for Prod Deployment Target in Prod Workspace
+        id: batch_inference
+        run: |
+          databricks bundle run batch_inference_job -t prod
+      - name: Run Model Serving Workflow for Prod Deployment Target in Prod Workspace
+        id: model_serving_endpoint
+        run: |
+          databricks bundle run deploy_model_serving_endpoint_job -t prod
