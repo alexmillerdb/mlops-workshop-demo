@@ -109,14 +109,15 @@ destination_availability_stream = (
   .option("cloudFiles.schemaEvolutionMode", "rescue")
   .option("cloudFiles.schemaHints", "event_ts timestamp, booking_date date, destination_id int")
   .option("cloudFiles.schemaLocation", f"/Volumes/{catalog}/{db}/feature_store_volume/stream/availability_schema")
-  .option("cloudFiles.maxFilesPerTrigger", 100) #Simulate streaming
+  .option("cloudFiles.maxFilesPerTrigger", 1000) #Simulate streaming
   .load("/databricks-datasets/travel_recommendations_realtime/raw_travel_data/fs-demo_destination-availability_logs/json")
   .drop("_rescued_data")
   .withColumnRenamed("event_ts", "ts")
 )
 
+dbdemos.wait_for_all_stream()
 # dbdemos.stop_all_streams_asynch(sleep_time=30)
-display(destination_availability_stream)
+# display(destination_availability_stream)
 
 # COMMAND ----------
 

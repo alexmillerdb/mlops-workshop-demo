@@ -30,6 +30,8 @@ resources:
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
         - task_key: WriteStreamingFeatures
           job_cluster_key: write_feature_table_job_cluster
+          depends_on:
+            - task_key: WriteBatchFeatures
           notebook_task:
             notebook_path: ../feature_engineering/notebooks/GenerateAndWriteStreamingFeatures.py
             base_parameters:
