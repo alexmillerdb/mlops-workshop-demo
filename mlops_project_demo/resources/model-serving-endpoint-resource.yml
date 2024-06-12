@@ -1,5 +1,40 @@
 # # yaml-language-server: $schema=../bundle_config_schema.json
 
+new_cluster: &new_cluster
+  new_cluster:
+    num_workers: 1
+    spark_version: 14.3.x-cpu-ml-scala2.12
+    node_type_id: i3.xlarge
+    custom_tags:
+      clusterSource: mlops-stacks_0.3
+
+common_permissions: &permissions
+  permissions:
+    - level: CAN_VIEW
+      group_name: users
+
+resources:
+  jobs:
+    deploy_model_serving_endpoint_job:
+      name: ${bundle.target}-mlops_project_demo-model-serving-endpoint-job
+      tasks:
+        - task_key: model_serving_endpoint_job
+          <<: *new_cluster
+          notebook_task:
+            notebook_path: ../deployment/model_serving/notebooks/DeployEndpoint.py
+            base_parameters:
+              catalog: ${bundle.target}
+              # git source information of current ML resource deployment. It will be persisted as part of the workflow run
+              git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
+
+      schedule:
+        quartz_cron_expression: "0 0 11 * * ?" # daily at 11am
+        timezone_id: UTC
+        pause_status: PAUSED
+      <<: *permissions
+      # tags: 
+      #   test: "1"
+
 # # Defines model and experiments
 # resources:
 #   model_serving_endpoints:
