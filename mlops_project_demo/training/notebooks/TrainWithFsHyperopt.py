@@ -96,6 +96,17 @@ dbdemos.setup_schema(catalog, db, reset_all_data=reset_all_data)
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC CREATE OR REPLACE FUNCTION missing_nulls_udf(input_value BIGINT)
+# MAGIC RETURNS BIGINT
+# MAGIC LANGUAGE PYTHON
+# MAGIC COMMENT 'Fill missing value with 0'
+# MAGIC AS $$
+# MAGIC   return 0 if input_value is None else input_value
+# MAGIC $$
+
+# COMMAND ----------
+
 # DBTITLE 1,Test the function to compute the distance between user and destination
 # MAGIC %sql
 # MAGIC SELECT distance_udf(user_latitude, user_longitude, latitude, longitude) AS hearth_distance, *
@@ -173,6 +184,12 @@ feature_lookups = [ # Grab all useful features from different feature store tabl
       timestamp_lookup_key="ts",
       feature_names=["availability"]
   ),
+  # Add our function to fill null values 
+  FeatureFunction(
+      udf_name="missing_nulls_udf",
+      input_bindings={"input_value": "availability"},
+      output_name="availability_filled"
+  ),
   # Add our function to compute the distance between the user and the destination 
   FeatureFunction(
       udf_name="distance_udf",
@@ -184,7 +201,7 @@ feature_lookups = [ # Grab all useful features from different feature store tabl
 training_set = fe.create_training_set(
     df=training_df,
     feature_lookups=feature_lookups,
-    exclude_columns=['user_id', 'destination_id', 'booking_date', 'clicked', 'price'],
+    exclude_columns=['user_id', 'destination_id', 'booking_date', 'clicked', 'price', 'availability'],
     label='purchased'
 )
 
@@ -193,6 +210,7 @@ training_set = fe.create_training_set(
 training_set_df = training_set.load_df()
 #Let's cache the training dataset for automl (to avoid recomputing it everytime)
 training_features_df = training_set_df.cache()
+training_features_df.write.format("delta").option("overwriteSchema", "true").mode("overwrite").saveAsTable("training_data_baseline")
 
 display(training_features_df)
 
@@ -588,7 +606,6 @@ score_batch = fe.score_batch(
   df=test_df).toPandas()
 
 # Predicting and evaluating best model on holdout set
-y_test_pred_proba = 1 - score_batch['prediction']
 y_test_pred_proba = score_batch['prediction']
 y_test_pred = (y_test_pred_proba >= 0.5).astype(int)
 
@@ -603,6 +620,18 @@ print(f'Testing Precision: {test_precision}')
 print(f'Testing Recall: {test_recall}')
 print(f'Testing F1: {test_f1}')
 print(f'Testing AUCROC: {test_aucroc}')
+
+# COMMAND ----------
+
+# DBTITLE 1,Save baseline dataframe used in Lakehouse Monitoring
+model_version = get_last_model_version(model_full_name)
+score_batch = fe.score_batch(
+  model_uri=f'models:/{catalog}.{schema}.hyperopt_feature_store/{model_version.version}', 
+  df=training_df)
+
+score_batch.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable("training_baseline_predictions")
+
+display(score_batch)
 
 # COMMAND ----------
 
