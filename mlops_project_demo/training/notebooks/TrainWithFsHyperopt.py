@@ -96,6 +96,18 @@ dbdemos.setup_schema(catalog, db, reset_all_data=reset_all_data)
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC CREATE OR REPLACE FUNCTION missing_nulls_udf(input_value BIGINT)
+# MAGIC RETURNS FLOAT
+# MAGIC LANGUAGE PYTHON
+# MAGIC COMMENT 'Fill missing value with 0'
+# MAGIC AS $$
+# MAGIC   import numpy as np
+# MAGIC   return 0.0 if input_value is None or np.isnan(input_value) else float(input_value)
+# MAGIC $$
+
+# COMMAND ----------
+
 # DBTITLE 1,Test the function to compute the distance between user and destination
 # MAGIC %sql
 # MAGIC SELECT distance_udf(user_latitude, user_longitude, latitude, longitude) AS hearth_distance, *
@@ -173,6 +185,12 @@ feature_lookups = [ # Grab all useful features from different feature store tabl
       timestamp_lookup_key="ts",
       feature_names=["availability"]
   ),
+  # Add our function to fill null values 
+  FeatureFunction(
+      udf_name="missing_nulls_udf",
+      input_bindings={"input_value": "availability"},
+      output_name="availability_filled"
+  ),
   # Add our function to compute the distance between the user and the destination 
   FeatureFunction(
       udf_name="distance_udf",
@@ -184,15 +202,20 @@ feature_lookups = [ # Grab all useful features from different feature store tabl
 training_set = fe.create_training_set(
     df=training_df,
     feature_lookups=feature_lookups,
-    exclude_columns=['user_id', 'destination_id', 'booking_date', 'clicked', 'price'],
+    exclude_columns=['user_id', 'destination_id', 'booking_date', 'clicked', 'price', 'availability'],
     label='purchased'
 )
 
 # COMMAND ----------
 
+from pyspark.sql import functions as F
+
 training_set_df = training_set.load_df()
 #Let's cache the training dataset for automl (to avoid recomputing it everytime)
-training_features_df = training_set_df.cache()
+training_features_df = training_set_df \
+  .withColumn("purchased", F.when(F.col("purchased")=="true", F.lit(1)).otherwise(F.lit(0))) \
+  .cache()
+training_features_df.write.format("delta").option("overwriteSchema", "true").mode("overwrite").saveAsTable("training_data_baseline")
 
 display(training_features_df)
 
@@ -259,6 +282,11 @@ RANDOM_SEED = 123
 
 data_df = training_features_df.toPandas()
 
+# # Convert int64 columns to float64
+# for col, dtype in data_df.dtypes.items():
+#     if dtype == 'int64':
+#         data_df[col] = data_df[col].astype('float64')
+
 # Splitting the dataset into training/validation and holdout sets
 train_val, test = train_test_split(
     data_df, 
@@ -315,9 +343,9 @@ def train_model(params):
       metric_names = ['accuracy', 'precision', 'recall', 'f1', 'aucroc']
       # Training evaluation metrics
       train_accuracy = accuracy_score(y_train, y_train_pred).round(3)
-      train_precision = precision_score(y_train, y_train_pred).round(3)
-      train_recall = recall_score(y_train, y_train_pred).round(3)
-      train_f1 = f1_score(y_train, y_train_pred).round(3)
+      train_precision = precision_score(y_train, y_train_pred)
+      train_recall = recall_score(y_train, y_train_pred)
+      train_f1 = f1_score(y_train, y_train_pred)
       train_aucroc = roc_auc_score(y_train, y_train_pred_proba).round(3)
       training_metrics = {
           'Accuracy': train_accuracy, 
@@ -389,8 +417,14 @@ mlflow.end_run()
 # COMMAND ----------
 
 # DBTITLE 1,Query MLflow API sorting on best training run
+from mlflow.entities import ViewType
 # Querying mlflow api instead of using web UI. Sorting by validation aucroc and then getting top run for best run.
-runs_df = mlflow.search_runs(experiment_ids=experiment.experiment_id, order_by=['metrics.validation_aucroc DESC'])
+runs_df = mlflow.search_runs(
+  experiment_ids=experiment.experiment_id, 
+  run_view_type=ViewType.ACTIVE_ONLY, 
+  order_by=['metrics.validation_aucroc DESC'])
+# filter on current parentRunID
+runs_df[runs_df['tags.mlflow.parentRunId']==run.info.run_id]
 best_run = runs_df.iloc[0]
 
 # extracting parameters, metrics, and metadata
@@ -456,7 +490,7 @@ with open(artifacts_path+"model/requirements.txt", 'r') as f:
 with mlflow.start_run(run_name="best_hyperopt_fs", experiment_id=experiment.experiment_id) as run:
 
   # define signature with the model
-  signature = infer_signature(x_sample, params={"predict_method": "predict_proba"})
+  signature = infer_signature(x_sample)
 
   #Use the feature store client to log our best model
   # log as sklearn
@@ -498,6 +532,13 @@ class ModelWrapper(PythonModel):
         """
         model_file_path = context.artifacts["model_file"]
         self.model = mlflow.xgboost.load_model(model_file_path)
+
+    def preprocess_input(self, model_input):
+
+        if isinstance(model_input, dict):
+            model_input = pd.DataFrame.from_dict(model_input)
+            
+        model_input = model_input.fillna(0)
 
     def predict(self, context, model_input, params={"predict_method": "predict_proba"}):
         params = params or {"predict_method": "predict"}
@@ -574,7 +615,7 @@ from training.utils.helper_functions import get_last_model_version
 test_set = fe.create_training_set(
     df=test_df,
     feature_lookups=feature_lookups,
-    exclude_columns=['user_id', 'destination_id', 'booking_date', 'clicked', 'price'],
+    exclude_columns=['user_id', 'destination_id', 'booking_date', 'clicked', 'price', 'availability'],
     label='purchased'
 )
 
@@ -588,21 +629,20 @@ score_batch = fe.score_batch(
   df=test_df).toPandas()
 
 # Predicting and evaluating best model on holdout set
-y_test_pred_proba = 1 - score_batch['prediction']
 y_test_pred_proba = score_batch['prediction']
 y_test_pred = (y_test_pred_proba >= 0.5).astype(int)
 
-test_accuracy = accuracy_score(y_test, y_test_pred).round(3)
-test_precision = precision_score(y_test, y_test_pred).round(3)
-test_recall = recall_score(y_test, y_test_pred).round(3)
-test_f1 = f1_score(y_test, y_test_pred).round(3)
-test_aucroc = roc_auc_score(y_test, y_test_pred_proba).round(3)
+# COMMAND ----------
 
-print(f'Testing Accuracy: {test_accuracy}')
-print(f'Testing Precision: {test_precision}')
-print(f'Testing Recall: {test_recall}')
-print(f'Testing F1: {test_f1}')
-print(f'Testing AUCROC: {test_aucroc}')
+# DBTITLE 1,Save baseline dataframe used in Lakehouse Monitoring
+model_version = get_last_model_version(model_full_name)
+score_batch = fe.score_batch(
+  model_uri=f'models:/{catalog}.{schema}.hyperopt_feature_store/{model_version.version}', 
+  df=training_df)
+
+score_batch.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable("training_baseline_predictions")
+
+display(score_batch)
 
 # COMMAND ----------
 

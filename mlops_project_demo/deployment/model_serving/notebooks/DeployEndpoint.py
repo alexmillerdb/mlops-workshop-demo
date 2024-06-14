@@ -16,11 +16,9 @@ dbutils.library.restartPython()
 
 dbutils.widgets.text("catalog", "dev")
 dbutils.widgets.text("reset_all_data", "false")
-dbutils.widgets.text("config_file", "model_serving_config.json")
 
 catalog = dbutils.widgets.get("catalog")
 reset_all_data = dbutils.widgets.get("reset_all_data")
-config_file = dbutils.widgets.get("config_file")
 
 if reset_all_data.lower() == "true":
   reset_all_data = True
@@ -60,7 +58,7 @@ if catalog.lower() == "staging":
   model_alias_to_evaluate = "Staging"
   model_alias_updated = "Challenger"
 if catalog.lower() == "prod":
-  model_alias_to_evaluate = "Challenger"
+  model_alias_to_evaluate = "prod"
   model_alias_updated = "Champion"
 
 # COMMAND ----------
@@ -241,9 +239,10 @@ import json
 test_df = spark.table("test_set")
 lookup_keys = (
     test_df.drop("purchased")
-    .limit(10)
     .toPandas()
+    .sample(n=5)
     .astype({"ts": "str", "booking_date": "str"})
+    .fillna(0)
     .to_dict(orient="records")
 )
 
