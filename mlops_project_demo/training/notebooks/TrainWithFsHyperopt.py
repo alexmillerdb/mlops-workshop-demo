@@ -97,12 +97,13 @@ dbdemos.setup_schema(catalog, db, reset_all_data=reset_all_data)
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC CREATE OR REPLACE FUNCTION missing_nulls_udf(input_value BIGINT)
-# MAGIC RETURNS BIGINT
+# MAGIC CREATE OR REPLACE FUNCTION missing_nulls_udf(input_value FLOAT)
+# MAGIC RETURNS FLOAT
 # MAGIC LANGUAGE PYTHON
 # MAGIC COMMENT 'Fill missing value with 0'
 # MAGIC AS $$
-# MAGIC   return 0 if input_value is None else input_value
+# MAGIC   import numpy as np
+# MAGIC   return 0.0 if input_value is None or np.isnan(input_value) else float(input_value)
 # MAGIC $$
 
 # COMMAND ----------
