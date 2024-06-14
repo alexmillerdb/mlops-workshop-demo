@@ -593,7 +593,7 @@ from training.utils.helper_functions import get_last_model_version
 test_set = fe.create_training_set(
     df=test_df,
     feature_lookups=feature_lookups,
-    exclude_columns=['user_id', 'destination_id', 'booking_date', 'clicked', 'price'],
+    exclude_columns=['user_id', 'destination_id', 'booking_date', 'clicked', 'price', "avalability"],
     label='purchased'
 )
 
