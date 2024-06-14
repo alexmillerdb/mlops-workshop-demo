@@ -239,8 +239,8 @@ import json
 test_df = spark.table("test_set")
 lookup_keys = (
     test_df.drop("purchased")
-    .limit(10)
     .toPandas()
+    .sample(n=5)
     .astype({"ts": "str", "booking_date": "str"})
     .fillna(0)
     .to_dict(orient="records")
