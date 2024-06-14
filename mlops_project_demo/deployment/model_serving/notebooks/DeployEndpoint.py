@@ -16,11 +16,9 @@ dbutils.library.restartPython()
 
 dbutils.widgets.text("catalog", "dev")
 dbutils.widgets.text("reset_all_data", "false")
-dbutils.widgets.text("config_file", "model_serving_config.json")
 
 catalog = dbutils.widgets.get("catalog")
 reset_all_data = dbutils.widgets.get("reset_all_data")
-config_file = dbutils.widgets.get("config_file")
 
 if reset_all_data.lower() == "true":
   reset_all_data = True
@@ -244,6 +242,7 @@ lookup_keys = (
     .limit(10)
     .toPandas()
     .astype({"ts": "str", "booking_date": "str"})
+    .fillna(0)
     .to_dict(orient="records")
 )
 
