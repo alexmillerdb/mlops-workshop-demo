@@ -63,7 +63,7 @@ if catalog.lower() == "staging":
   model_alias_to_evaluate = "Staging"
   model_alias_updated = "Challenger"
 if catalog.lower() == "prod":
-  model_alias_to_evaluate = "Challenger"
+  model_alias_to_evaluate = "prod"
   model_alias_updated = "Champion"
 
 # COMMAND ----------
