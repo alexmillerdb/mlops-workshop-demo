@@ -50,10 +50,6 @@ endpoint_name = f"{catalog}_travel_purchase_predictions_{current_user}"
 
 # COMMAND ----------
 
-# endpoint_name = f"travel_purchase_predictions_{current_user}"
-
-# COMMAND ----------
-
 import requests
 from typing import Dict
 from pyspark.sql import functions as F
@@ -165,10 +161,11 @@ w = WorkspaceClient()
 
 TABLE_NAME = f"{catalog}.{schema}.inference_table_analysis"
 BASELINE_TABLE = f"{catalog}.{schema}.training_baseline_predictions"
+BASELINE_TABLE = None
 MODEL_NAME = "hyperopt_feature_store"
 TIMESTAMP_COL = "timestamp"
 MODEL_ID_COL = "model_id" # Name of column to use as model identifier (here we'll use the model_name+version)
-PREDICTION_COL = "output"  # What to name predictions in the generated tables
+PREDICTION_COL = "prediction"  # What to name predictions in the generated tables
 LABEL_COL = None # Name of ground-truth labels column
 # ID_COL = "ID" # [OPTIONAL] only used for joining labels
 

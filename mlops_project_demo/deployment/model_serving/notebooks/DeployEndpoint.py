@@ -6,7 +6,11 @@ notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.ge
 
 # COMMAND ----------
 
-# MAGIC %pip install -r ../../../requirements.txt
+# %pip install -r ../../../requirements.txt
+
+# COMMAND ----------
+
+# MAGIC %pip install databricks-feature-engineering==0.2.0 databricks-sdk==0.20.0
 
 # COMMAND ----------
 
@@ -172,6 +176,7 @@ from databricks.sdk.service.serving import (
     ServingEndpointDetailed,
     AutoCaptureConfigInput
 )
+from datetime import timedelta
 
 # Get model version by alias
 client = MlflowClient()
@@ -202,13 +207,13 @@ endpoint_config = EndpointCoreConfigInput(served_models=served_models, auto_capt
 try:
     print(f"Creating endpoint {endpoint_name} with latest version...")
     wc.serving_endpoints.create_and_wait(
-        endpoint_name, config=endpoint_config
+        endpoint_name, config=endpoint_config, timeout=timedelta(minutes=30)
     )
 except Exception as e:
     if "already exists" in str(e):
         print(f"Endpoint exists, updating with latest model version...")
         wc.serving_endpoints.update_config_and_wait(
-            endpoint_name, served_models=served_models, auto_capture_config=auto_capture_config
+            endpoint_name, served_models=served_models, auto_capture_config=auto_capture_config, timeout=timedelta(minutes=30)
         )
     else:
         raise e
