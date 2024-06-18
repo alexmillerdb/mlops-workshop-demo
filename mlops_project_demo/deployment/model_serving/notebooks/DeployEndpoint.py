@@ -203,13 +203,13 @@ endpoint_config = EndpointCoreConfigInput(served_models=served_models, auto_capt
 try:
     print(f"Creating endpoint {endpoint_name} with latest version...")
     wc.serving_endpoints.create_and_wait(
-        endpoint_name, config=endpoint_config, timeout=timedelta(minutes=30)
+        endpoint_name, config=endpoint_config
     )
 except Exception as e:
     if "already exists" in str(e):
         print(f"Endpoint exists, updating with latest model version...")
         wc.serving_endpoints.update_config_and_wait(
-            endpoint_name, served_models=served_models, auto_capture_config=auto_capture_config, timeout=timedelta(minutes=30)
+            endpoint_name, served_models=served_models, auto_capture_config=auto_capture_config
         )
     else:
         raise e
