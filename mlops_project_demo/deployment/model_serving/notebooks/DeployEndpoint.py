@@ -6,7 +6,7 @@ notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.ge
 
 # COMMAND ----------
 
-# MAGIC %pip install -r ../../../requirements.txt
+# MAGIC %pip install databricks-feature-engineering==0.2.0 databricks-sdk==0.20.0
 
 # COMMAND ----------
 
@@ -172,6 +172,7 @@ from databricks.sdk.service.serving import (
     ServingEndpointDetailed,
     AutoCaptureConfigInput
 )
+from datetime import timedelta
 
 # Get model version by alias
 client = MlflowClient()
