@@ -19,7 +19,7 @@ jobs:
   unit_tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: 3.11.7
@@ -42,7 +42,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - uses: databricks/setup-cli@v0.245.0
       - name: Validate Bundle For Test Deployment Target in Staging Workspace
         id: validate
