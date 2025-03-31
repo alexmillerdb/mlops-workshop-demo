@@ -22,7 +22,7 @@ resources:
       # table_name: dev.mlops_project_demo.predictions
       table_name: ${bundle.target}.mlops_project_demo_${workspace.current_user.short_name}.travel_purchase_prediction
       # TODO: Update the output schema name as per your requirements
-      output_schema_name: ${bundle.target}.mlops_project_demo
+      output_schema_name: ${bundle.target}.mlops_project_demo_${workspace.current_user.short_name}
       # TODO: Update the below parameters as per your requirements
       assets_dir: /Users/${workspace.current_user.userName}/databricks_lakehouse_monitoring
       inference_log:
