@@ -1,7 +1,7 @@
 # The name of the bundle. run `databricks bundle schema` to see the full bundle settings schema.
 bundle:
   name: mlops_project_demo
-  databricks_cli_version: "0.221.1"
+  databricks_cli_version: "0.245.0"
 
 variables:
   experiment_name:

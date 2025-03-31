@@ -22,8 +22,8 @@ jobs:
     concurrency: mlops_project_demo-prod-bundle-job
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v3
-      - uses: databricks/setup-cli@v0.221.1
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v0.245.0
       - name: Validate Bundle For Prod
         id: validate
         run: |

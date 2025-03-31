@@ -21,11 +21,11 @@ jobs:
         id: timestamp
         run: |
           echo "timestamp=$(date +'%s')" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.WORKFLOW_TOKEN }}
-      - uses: databricks/setup-cli@v0.221.1
+      - uses: databricks/setup-cli@v0.245.0
       - name: Convert Project Name to Only Alphanumeric Characters
         run: |
           PROJECT_NAME_ALPHA=$(echo "${{ github.event.inputs.project_name }}" | tr ' -' '_')

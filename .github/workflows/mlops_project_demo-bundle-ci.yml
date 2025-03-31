@@ -22,10 +22,10 @@ jobs:
     concurrency: mlops_project_demo-staging-bundle-job
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: databricks/setup-cli@v0.221.1
+      - uses: databricks/setup-cli@v0.245.0
       - name: Validate Bundle For Staging
         id: validate
         env:
@@ -60,10 +60,10 @@ jobs:
     concurrency: mlops_project_demo-prod-bundle-job
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: databricks/setup-cli@v0.221.1
+      - uses: databricks/setup-cli@v0.245.0
       - name: Validate Bundle For Prod
         id: validate
         env:
